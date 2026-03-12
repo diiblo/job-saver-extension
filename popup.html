@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Job Saver Config</title>
+  <link rel="stylesheet" href="popup.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    /* Surcharge simplifiée pour la config */
+    body { width: 300px; }
+    .header { margin-bottom: 15px; }
+    .form-group { margin-bottom: 5px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <img src="icons/icon48.png" alt="Logo" class="logo">
+      <h1>Configuration</h1>
+    </div>
+    
+    <div class="form-group">
+      <label for="webhookUrl">URL Webhook (Google Apps Script) :</label>
+      <input type="password" id="webhookUrl" placeholder="https://script.google.com/.../exec">
+    </div>
+
+    <div class="actions">
+      <button id="saveBtn" class="btn btn-primary">Enregistrer</button>
+    </div>
+    
+    <div id="status" class="status-msg hidden"></div>
+  </div>
+  
+  <script src="popup.js"></script>
+</body>
+</html>
