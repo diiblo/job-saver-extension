@@ -28,6 +28,42 @@
   transition: transform 0.2s, background-color 0.2s;
 }
 
+/* Pastille verte : offre déjà enregistrée */
+#jsaver-toggle-btn {
+  position: relative;
+}
+
+#jsaver-applied-dot {
+  display: none;
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background-color: #10b981;
+  border: 2px solid #fff;
+}
+
+.jsaver-applied #jsaver-applied-dot {
+  display: block;
+}
+
+#jsaver-already {
+  display: none;
+  margin-bottom: 12px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background-color: #d1fae5;
+  color: #065f46;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+#jsaver-already.visible {
+  display: block;
+}
+
 #jsaver-toggle-btn:hover {
   background-color: #2563eb;
   transform: scale(1.05);
