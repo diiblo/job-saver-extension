@@ -113,13 +113,23 @@ document.addEventListener("DOMContentLoaded", () => {
       ["url", "Lien"],
       ["location", "Lieu"],
       ["source", "Source"],
-      ["appliedAt", "Date d'Envoi"],
+      ["appliedAt", "Date d'envoi / candidature"],
+      ["recruiterName", "Nom du recruteur"],
+      ["email", "E-mail"],
+      ["phone", "N° téléphone"],
+      ["interviewDate", "Date d'entretien"],
+      ["thankYouSent", "Mail de remerciement"],
+      ["interviewResponse", "Réponse entretien"],
       ["applicationKind", "Type de candidature"],
       ["notes", "Notes"],
     ];
     const escape = (value) => `"${String(value || "").replace(/"/g, '""')}"`;
     const rows = history.map((entry) => columns.map(([key]) => {
-      const value = key === "appliedAt" && entry[key] ? new Date(entry[key]).toLocaleDateString("fr-FR") : entry[key];
+      const value = key === "interviewDate" && entry[key]
+        ? `${entry[key].slice(8, 10)}/${entry[key].slice(5, 7)}/${entry[key].slice(0, 4)}`
+        : key === "appliedAt" && entry[key]
+          ? new Date(entry[key]).toLocaleDateString("fr-FR")
+          : entry[key];
       return escape(value);
     }).join(";"));
     // BOM pour qu'Excel lise correctement les accents

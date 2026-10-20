@@ -83,6 +83,7 @@
   border-radius: 12px;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
   border: 1px solid #e5e7eb;
+  max-height: 85vh;
   opacity: 0;
   transform: translateY(20px);
   pointer-events: none;
@@ -152,6 +153,8 @@
 /* Corp */
 .jsaver-body {
   padding: 16px;
+  max-height: calc(85vh - 52px);
+  overflow-y: auto;
 }
 
 .jsaver-group {
