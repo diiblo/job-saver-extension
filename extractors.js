@@ -166,8 +166,126 @@
     };
   }
 
-  // Extracteurs propres à certains sites (prioritaires sur le reste)
-  const siteExtractors = [];
+  // --- Extracteurs propres à certains sites (prioritaires sur le reste) ---
+  // Les classes CSS de ces sites changent régulièrement : chaque champ essaie
+  // plusieurs sélecteurs, et les données JobPosting restent en repli.
+
+  function text(...selectors) {
+    for (const selector of selectors) {
+      for (const el of document.querySelectorAll(selector)) {
+        const value = clean(el.innerText || el.textContent);
+        if (value) return value;
+      }
+    }
+    return "";
+  }
+
+  // "(3) Titre | Entreprise | LinkedIn" -> ["Titre", "Entreprise"]
+  function splitTitle(separator) {
+    return document.title.replace(/^\(\d+\)\s*/, "").split(separator).map(clean);
+  }
+
+  const siteExtractors = [
+    {
+      match: /(^|\.)linkedin\./,
+      extract() {
+        const [docTitle, docCompany] = splitTitle(" | ");
+        const location = text(
+          ".job-details-jobs-unified-top-card__primary-description-container .tvm__text",
+          ".job-details-jobs-unified-top-card__bullet",
+          ".jobs-unified-top-card__bullet",
+          ".topcard__flavor--bullet"
+        ).split("·")[0];
+        return {
+          title: text(
+            ".job-details-jobs-unified-top-card__job-title",
+            ".jobs-unified-top-card__job-title",
+            ".top-card-layout__title"
+          ) || docTitle,
+          company: text(
+            ".job-details-jobs-unified-top-card__company-name",
+            ".jobs-unified-top-card__company-name",
+            ".topcard__org-name-link"
+          ) || (docCompany !== "LinkedIn" ? docCompany : ""),
+          location: clean(location),
+          jobTypeHint: text(
+            ".job-details-fit-level-preferences",
+            ".job-details-preferences-and-skills",
+            ".job-details-jobs-unified-top-card__job-insight",
+            ".description__job-criteria-list"
+          ),
+        };
+      },
+    },
+    {
+      match: /(^|\.)indeed\./,
+      extract() {
+        const title = text(
+          '[data-testid="jobsearch-JobInfoHeader-title"]',
+          ".jobsearch-JobInfoHeader-title"
+        ).replace(/\s*-\s*(job post|offre d'emploi)$/i, "");
+        return {
+          title,
+          company: text(
+            '[data-testid="inlineHeader-companyName"]',
+            '[data-company-name="true"]',
+            ".jobsearch-CompanyInfoContainer a"
+          ),
+          location: text(
+            '[data-testid="inlineHeader-companyLocation"]',
+            '[data-testid="job-location"]',
+            "#jobLocationText"
+          ),
+          jobTypeHint: text(
+            "#salaryInfoAndJobType",
+            '[data-testid="jobsearch-OtherJobDetailsContainer"]',
+            "#jobDetailsSection"
+          ),
+        };
+      },
+    },
+    {
+      match: /labonnealternance\./,
+      extract() {
+        // Entreprise susceptible de recruter (candidature spontanée) :
+        // "Candidature spontanée en <métier> chez <entreprise> - La bonne alternance"
+        const spontaneous = document.title.match(/^Candidature spontanée en (.+) chez (.+?) - La bonne alternance/i);
+        if (spontaneous || /\/recruteurs_lba\//.test(location.pathname)) {
+          const desc = (meta("description") || "").match(/chez (.+?) à (.+?) \((.+?)\)/);
+          const metier = spontaneous ? spontaneous[1] : desc && desc[3];
+          return {
+            title: metier ? `Candidature spontanée - ${metier}` : "Candidature spontanée",
+            company: (spontaneous && spontaneous[2]) || (desc && desc[1]) || "",
+            location: desc ? desc[2] : "",
+            jobType: "Alternance",
+            applicationKind: "Candidature spontanée",
+          };
+        }
+        // Offre : les données JobPosting sont présentes, le titre de page sert de repli
+        const offer = document.title.match(/^Offre d'emploi (.+) - La bonne alternance/i);
+        return { title: offer ? offer[1] : "", jobType: "Alternance" };
+      },
+    },
+    {
+      match: /glassdoor\./,
+      extract() {
+        return {
+          title: text('[data-test="job-title"]', '[class*="JobDetails_jobTitle"]'),
+          company: text('[data-test="employer-name"]', '[class*="EmployerProfile_employerName"]'),
+          location: text('[data-test="location"]', '[class*="JobDetails_location"]'),
+        };
+      },
+    },
+    {
+      match: /welcometothejungle\./,
+      extract() {
+        return {
+          title: text('[data-testid="job-section-title"] h2'),
+          company: text('[data-testid="job-header-organization-title"]', 'a[href*="/companies/"] span'),
+        };
+      },
+    },
+  ];
 
   function fromSite() {
     for (const { match, extract } of siteExtractors) {
