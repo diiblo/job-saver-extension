@@ -145,6 +145,7 @@ async function saveJob(payload) {
     const result = await postToWebhook(payload);
     if (result.status === "success") {
       await cacheLocally(payload);
+      await addToHistory(payload);
       return { status: "success" };
     }
     if (result.status === "duplicate") return { status: "duplicate", date: result.date };
@@ -154,7 +155,30 @@ async function saveJob(payload) {
     // Erreur réseau : on garde la candidature pour la renvoyer plus tard
     await enqueue(payload);
     await cacheLocally(payload);
+    await addToHistory(payload);
     return { status: "queued" };
+  }
+}
+
+// Historique local (export CSV depuis la popup), limité aux 500 dernières candidatures
+const HISTORY_KEY = "history";
+const HISTORY_MAX = 500;
+
+async function addToHistory(payload) {
+  const data = await chrome.storage.local.get(HISTORY_KEY);
+  const { token, force, ...entry } = payload;
+  const history = [entry, ...(data[HISTORY_KEY] || [])].slice(0, HISTORY_MAX);
+  await chrome.storage.local.set({ [HISTORY_KEY]: history });
+}
+
+async function ping() {
+  try {
+    const result = await getFromWebhook("ping");
+    return result.status === "success" ? result : { status: "error", message: result.message };
+  } catch (err) {
+    if (err instanceof ConfigError) return { status: "noConfig" };
+    // Ancienne version de Code.gs (sans doGet) : la réponse n'est pas du JSON
+    return { status: "error", message: "Réponse invalide : vérifiez l'URL et redéployez le dernier Code.gs." };
   }
 }
 
@@ -218,4 +242,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     refreshSavedCache().then(sendResponse);
     return true;
   }
+  if (request.action === "ping") {
+    ping().then(sendResponse);
+    return true;
+  }
+});
+
+// Raccourci clavier (Alt+Shift+J par défaut)
+chrome.commands.onCommand.addListener((command, tab) => {
+  if (command !== "toggle-panel" || !tab || !tab.id) return;
+  chrome.tabs.sendMessage(tab.id, { action: "togglePanel" }).catch(() => {});
 });

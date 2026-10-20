@@ -1,4 +1,8 @@
-/* Isolation des styles pour éviter les conflits CSS avec la page hôte */
+/* Feuille chargée dans le Shadow DOM du panneau : on coupe l'héritage des styles de la page */
+:host {
+  all: initial;
+}
+
 #job-saver-wrapper {
   position: fixed;
   bottom: 20px;
@@ -92,8 +96,15 @@
   pointer-events: auto;
 }
 
-.jsaver-open #jsaver-toggle-btn {
+.jsaver-open #jsaver-toggle-btn,
+.jsaver-button-hidden #jsaver-toggle-btn {
   display: none;
+}
+
+/* Bouton masqué : le panneau s'ouvre au même endroit */
+.jsaver-button-hidden #jsaver-panel,
+.jsaver-button-hidden #jsaver-toast {
+  bottom: 0;
 }
 
 /* Header */

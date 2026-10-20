@@ -5,37 +5,64 @@
   <title>Job Saver Config</title>
   <link rel="stylesheet" href="popup.css">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-  <style>
-    /* Surcharge simplifiée pour la config */
-    body { width: 300px; }
-    .header { margin-bottom: 15px; }
-    .form-group { margin-bottom: 5px; }
-  </style>
 </head>
 <body>
   <div class="container">
     <div class="header">
       <img src="icons/icon48.png" alt="Logo" class="logo">
-      <h1>Configuration</h1>
-    </div>
-    
-    <div class="form-group">
-      <label for="webhookUrl">URL Webhook (Google Apps Script) :</label>
-      <input type="password" id="webhookUrl" placeholder="https://script.google.com/.../exec">
+      <h1>Job Saver</h1>
     </div>
 
-    <div class="form-group">
-      <label for="secretToken">Jeton secret (si défini dans Code.gs) :</label>
-      <input type="password" id="secretToken" placeholder="Facultatif">
+    <button id="openPanelBtn" class="btn btn-primary btn-block">Ouvrir le panneau sur cette page</button>
+    <p class="text-sm text-gray hint">Raccourci : <kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>J</kbd></p>
+
+    <div class="section">
+      <h2>Connexion Google Sheets</h2>
+      <div class="form-group">
+        <label for="webhookUrl">URL Webhook (Google Apps Script) :</label>
+        <input type="password" id="webhookUrl" placeholder="https://script.google.com/.../exec">
+      </div>
+      <div class="form-group">
+        <label for="secretToken">Jeton secret (si défini dans Code.gs) :</label>
+        <input type="password" id="secretToken" placeholder="Facultatif">
+      </div>
+      <div class="actions">
+        <button id="testBtn" class="btn btn-secondary">Tester</button>
+        <button id="saveBtn" class="btn btn-primary">Enregistrer</button>
+      </div>
     </div>
 
-    <div class="actions">
-      <button id="saveBtn" class="btn btn-primary">Enregistrer</button>
+    <div class="section">
+      <h2>Options</h2>
+      <label class="checkbox">
+        <input type="checkbox" id="detectApplications">
+        Proposer d'enregistrer les candidatures détectées
+      </label>
+      <label class="checkbox">
+        <input type="checkbox" id="alwaysShowButton">
+        Afficher le bouton flottant sur tous les sites
+      </label>
     </div>
-    
+
+    <div class="section">
+      <h2>Suivi</h2>
+      <div class="stat-row">
+        <span id="knownCount">–</span>
+        <button id="syncBtn" class="btn-link">Synchroniser</button>
+      </div>
+      <div class="stat-row">
+        <span id="queueCount">–</span>
+        <button id="flushBtn" class="btn-link">Renvoyer</button>
+      </div>
+      <div class="stat-row">
+        <span id="historyCount">–</span>
+        <button id="exportBtn" class="btn-link">Exporter CSV</button>
+      </div>
+    </div>
+
     <div id="status" class="status-msg hidden"></div>
   </div>
-  
+
   <script src="popup.js"></script>
 </body>
 </html>

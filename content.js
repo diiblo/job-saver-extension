@@ -106,13 +106,23 @@ function urlKey(url) {
 
 // Initialisation au chargement
 function initJobSaver() {
-  if (document.getElementById("job-saver-wrapper")) return;
+  if (document.getElementById("job-saver-host")) return;
 
+  // Shadow DOM : le style du site ne peut pas casser le panneau, et inversement
+  const host = document.createElement("div");
+  host.id = "job-saver-host";
+  host.style.display = "none";
+  const root = host.attachShadow({ mode: "open" });
+  const style = document.createElement("link");
+  style.rel = "stylesheet";
+  style.href = chrome.runtime.getURL("content.css");
+  style.addEventListener("load", () => { host.style.display = ""; });
+  root.appendChild(style);
   const container = document.createElement("div");
   container.innerHTML = injectedHTML;
-  document.body.appendChild(container.firstElementChild);
+  root.appendChild(container.firstElementChild);
+  document.body.appendChild(host);
 
-  const root = document;
   const $ = (id) => root.getElementById(id);
 
   const wrapper = $("job-saver-wrapper");
@@ -140,7 +150,21 @@ function initJobSaver() {
   let autoValues = {};
   let forceNext = false;
 
+  // Bouton flottant : uniquement sur les pages d'offres, sauf option "toujours afficher".
+  // Le panneau reste accessible partout via le raccourci, le clic droit ou l'icône.
+  let alwaysShowButton = false;
+  chrome.storage.local.get("alwaysShowButton", (data) => {
+    alwaysShowButton = !!data.alwaysShowButton;
+    updateButtonVisibility();
+  });
+
+  function updateButtonVisibility() {
+    const visible = alwaysShowButton || JobSaverExtract.isJobPage();
+    wrapper.classList.toggle("jsaver-button-hidden", !visible);
+  }
+
   function autofill(force) {
+    updateButtonVisibility();
     const data = JobSaverExtract.extract();
     for (const key of autoKeys) {
       const value = data[key];
@@ -408,6 +432,11 @@ function initJobSaver() {
       }
       openPanel();
       checkAlreadyApplied();
+      sendResponse({ received: true });
+    }
+    if (request.action === "togglePanel") {
+      if (wrapper.classList.contains("jsaver-open")) closeBtn.click();
+      else toggleBtn.click();
       sendResponse({ received: true });
     }
   });

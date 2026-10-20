@@ -322,8 +322,15 @@
     };
   }
 
+  // Page d'offre : site d'emploi connu ou données JobPosting présentes
+  function isJobPage() {
+    const host = location.hostname.replace(/^www\./, "");
+    return SOURCES.some(([pattern]) => pattern.test(host)) || !!fromJsonLd().title;
+  }
+
   window.JobSaverExtract = {
     extract,
+    isJobPage,
     detectSource,
     detectJobType,
     normalizeUrl,
