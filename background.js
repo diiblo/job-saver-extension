@@ -178,6 +178,20 @@ async function flushQueue() {
   return { sent, remaining: remaining.length };
 }
 
+// Dernière offre consultée dans l'onglet, ou dans l'onglet qui l'a ouvert
+// (le bouton "Postuler" ouvre souvent le site du recruteur dans un nouvel onglet)
+async function getLastJob(tab) {
+  const ids = [tab.id, tab.openerTabId].filter((id) => id !== undefined);
+  const keys = ids.map((id) => `lastJob_${id}`);
+  const data = await chrome.storage.session.get(keys);
+  for (const key of keys) if (data[key]) return data[key];
+  return null;
+}
+
+chrome.tabs.onRemoved.addListener((tabId) => {
+  chrome.storage.session.remove(`lastJob_${tabId}`);
+});
+
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === RETRY_ALARM) flushQueue();
   if (alarm.name === CACHE_ALARM) refreshSavedCache();
@@ -190,6 +204,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
   if (request.action === "flushQueue") {
     flushQueue().then(sendResponse);
+    return true;
+  }
+  if (request.action === "rememberJob" && sender.tab) {
+    chrome.storage.session.set({ [`lastJob_${sender.tab.id}`]: request.job });
+    return;
+  }
+  if (request.action === "getLastJob" && sender.tab) {
+    getLastJob(sender.tab).then(sendResponse);
     return true;
   }
   if (request.action === "refreshCache") {

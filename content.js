@@ -65,8 +65,33 @@ const injectedHTML = `
       <div id="jsaver-status"></div>
     </div>
   </div>
+
+  <div id="jsaver-toast">
+    <div id="jsaver-toast-msg"></div>
+    <div class="jsaver-toast-actions">
+      <button id="jsaver-toast-save">Enregistrer</button>
+      <button id="jsaver-toast-edit">Vérifier</button>
+      <button id="jsaver-toast-close" title="Ignorer">&times;</button>
+    </div>
+  </div>
 </div>
 `;
+
+// Messages affichés par les sites une fois la candidature envoyée
+const CONFIRM_PATTERNS = [
+  /votre candidature (a|à) (bien )?été (envoyée|transmise|reçue|enregistrée|prise en compte)/i,
+  /candidature (a|à) (bien )?été (envoyée|transmise)/i,
+  /merci (pour|de) votre candidature/i,
+  /your application (has been|was) (sent|submitted|received)/i,
+  /thanks? (you )?for (your application|applying)/i,
+  /^application (sent|submitted)( successfully)?[.!]?$/i,
+];
+
+// Boutons "Postuler" : redirection vers le site du recruteur
+const APPLY_LABEL = /^(postuler|candidater|je postule|apply|apply now|postuler maintenant|postuler sur le site|envoyer (ma|la) candidature|submit application)\b/i;
+// Formulaires intégrés au site : on attend plutôt le message de confirmation
+const INLINE_APPLY = /candidature simplifiée|easy apply/i;
+const INLINE_APPLY_SELECTOR = '[data-testid="postuler-button"]';
 
 // Clé entreprise + titre, identique à celle du service worker et d'Apps Script
 function jobKey(company, title) {
@@ -128,6 +153,7 @@ function initJobSaver() {
     forceNext = false;
     sendBtn.textContent = "Sauvegarder";
     checkAlreadyApplied();
+    if (data.company && data.title) rememberJob();
   }
 
   // Affiche "Déjà postulé" si l'offre est dans le cache des candidatures
@@ -248,6 +274,129 @@ function initJobSaver() {
     statusDiv.textContent = msg;
     statusDiv.className = type;
   }
+
+  // --- Détection automatique des candidatures ---
+
+  const toast = $("jsaver-toast");
+  const toastMsg = $("jsaver-toast-msg");
+  let promptedFor = "";
+  let detectEnabled = true;
+  chrome.storage.local.get("detectApplications", (data) => {
+    detectEnabled = data.detectApplications !== false;
+  });
+
+  function hideToast() {
+    toast.classList.remove("visible");
+  }
+
+  $("jsaver-toast-close").addEventListener("click", hideToast);
+  $("jsaver-toast-edit").addEventListener("click", () => {
+    hideToast();
+    openPanel();
+  });
+  $("jsaver-toast-save").addEventListener("click", () => {
+    hideToast();
+    openPanel();
+    sendBtn.click();
+  });
+
+  // Mémorise l'offre consultée dans cet onglet : la page de confirmation du
+  // recruteur (souvent sur un autre site) ne contient pas toujours ses infos.
+  function rememberJob() {
+    const payload = collectPayload();
+    if (!payload.company && !payload.jobTitle) return;
+    chrome.runtime.sendMessage({ action: "rememberJob", job: payload });
+  }
+
+  function isAlreadySaved() {
+    return new Promise((resolve) => {
+      chrome.storage.local.get("savedJobs", ({ savedJobs }) => {
+        const cache = savedJobs || { byUrl: {}, byKey: {} };
+        resolve(!!(cache.byUrl[urlKey(inputs.url.value)]
+          || cache.byKey[jobKey(inputs.company.value, inputs.title.value)]));
+      });
+    });
+  }
+
+  async function promptSave(message, useLastJob) {
+    if (!detectEnabled || wrapper.classList.contains("jsaver-open")) return;
+    autofill(false);
+
+    if (useLastJob) {
+      const last = await chrome.runtime.sendMessage({ action: "getLastJob" }).catch(() => null);
+      // Page de confirmation d'un autre site (ou sans infos) : l'offre d'origine
+      // est plus fiable, y compris son lien et sa source.
+      if (last && (!inputs.company.value || last.source !== inputs.source.value)) {
+        inputs.company.value = last.company || "";
+        inputs.title.value = last.jobTitle || "";
+        inputs.location.value = last.location || "";
+        inputs.url.value = last.url || inputs.url.value;
+        inputs.source.value = last.source || inputs.source.value;
+        inputs.jobType.value = last.jobType || inputs.jobType.value;
+        inputs.applicationKind.value = last.applicationKind || inputs.applicationKind.value;
+      }
+    }
+
+    const key = urlKey(inputs.url.value) || jobKey(inputs.company.value, inputs.title.value);
+    if (!key || promptedFor === key || await isAlreadySaved()) return;
+    promptedFor = key;
+
+    const label = [inputs.title.value, inputs.company.value].filter(Boolean).join(" – ");
+    toastMsg.textContent = label ? `${message}\n${label}` : message;
+    toast.classList.add("visible");
+  }
+
+  function matchesConfirmation(text) {
+    return text.split("\n").some((line) => {
+      const trimmed = line.trim();
+      return CONFIRM_PATTERNS.some((pattern) => pattern.test(trimmed));
+    });
+  }
+
+  // Les confirmations apparaissent souvent dans une fenêtre ajoutée dynamiquement
+  let pendingNodes = [];
+  let scanTimer = null;
+  const observer = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      for (const node of mutation.addedNodes) {
+        if (node.nodeType === Node.ELEMENT_NODE && !wrapper.contains(node)) pendingNodes.push(node);
+      }
+    }
+    if (!pendingNodes.length || scanTimer) return;
+    scanTimer = setTimeout(() => {
+      const nodes = pendingNodes;
+      pendingNodes = [];
+      scanTimer = null;
+      for (const node of nodes) {
+        const text = (node.innerText || "").trim();
+        if (text && text.length < 5000 && matchesConfirmation(text)) {
+          promptSave("🎉 Candidature envoyée détectée !", true);
+          return;
+        }
+      }
+    }, 800);
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+
+  // Page de confirmation chargée directement (sites carrière, ATS)
+  setTimeout(() => {
+    if (matchesConfirmation((document.body.innerText || "").slice(0, 30000))) {
+      promptSave("🎉 Candidature envoyée détectée !", true);
+    }
+  }, 1500);
+
+  // Clic sur "Postuler" : on mémorise l'offre et on propose de l'enregistrer
+  document.addEventListener("click", (event) => {
+    const el = event.target.closest && event.target.closest("button, a, [role='button']");
+    if (!el || wrapper.contains(el)) return;
+    const label = (el.innerText || el.getAttribute("aria-label") || "").trim();
+    const inline = INLINE_APPLY.test(label) || el.matches(INLINE_APPLY_SELECTOR);
+    if (!inline && !APPLY_LABEL.test(label)) return;
+
+    autofill(false);
+    rememberJob();
+    if (!inline) setTimeout(() => promptSave("Vous postulez à cette offre ?", false), 1500);
+  }, true);
 
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "updateField") {

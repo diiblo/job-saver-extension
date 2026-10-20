@@ -215,6 +215,66 @@
   cursor: not-allowed;
 }
 
+/* Proposition d'enregistrement après une candidature */
+#jsaver-toast {
+  display: none;
+  position: absolute;
+  bottom: 60px;
+  right: 0;
+  width: 280px;
+  padding: 12px;
+  background-color: #111827;
+  color: #f9fafb;
+  border-radius: 10px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+  font-size: 13px;
+}
+
+#jsaver-toast.visible {
+  display: block;
+}
+
+.jsaver-open #jsaver-toast {
+  display: none;
+}
+
+#jsaver-toast-msg {
+  white-space: pre-line;
+  margin-bottom: 10px;
+  line-height: 1.4;
+}
+
+.jsaver-toast-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.jsaver-toast-actions button {
+  border: none;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+#jsaver-toast-save {
+  flex: 1;
+  background-color: #3b82f6;
+  color: #fff;
+}
+
+#jsaver-toast-edit {
+  background-color: #374151;
+  color: #f9fafb;
+}
+
+#jsaver-toast-close {
+  background: none;
+  color: #9ca3af;
+  font-size: 16px;
+}
+
 #jsaver-status {
   margin-top: 10px;
   font-size: 12px;
