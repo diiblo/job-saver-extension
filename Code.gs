@@ -1,50 +1,90 @@
-// Ce code est à copier/coller dans l'éditeur de script de votre Google Sheet
-// Outils (ou Extensions) > Apps Script
+// Webhook Job Saver du document TABLEAU SUIVI RECHERCHES.
 
 // Jeton secret (facultatif mais recommandé) : si renseigné, l'extension doit
 // envoyer le même jeton (champ "Jeton secret" de la configuration).
 // Sans jeton, toute personne connaissant l'URL peut écrire dans votre fichier.
 var SECRET_TOKEN = "";
-
-// Onglet utilisé. S'il n'existe pas, le premier onglet du fichier est utilisé.
-var SHEET_NAME = "Candidatures";
+var SPREADSHEET_ID = "15kqAxHo9SEyP3p2zCt7PQ6Ozh8wzhbp0BcfRI3u6GR8";
+var SHEET_ID = 1656407877;
 var HEADERS = [
-  "Entreprise",
-  "Titre de l'offre",
-  "Type de poste",
-  "Lien",
-  "Lieu",
-  "Source",
-  "Date d'Envoi",
-  "Date de Relance",
-  "Type de candidature",
-  "Statut",
+  "Date d'envoi",
+  "Nom de l'entreprise",
+  "Intitulé du poste",
+  "Lien fiche de poste",
+  "Nom du recruteur Contact LinkedIn",
+  "E-mail",
+  "N° téléphone",
+  "Date candidature",
+  "Date relance",
+  "Date d'entretien",
+  "Mail de remerciement (OUI/NON)",
+  "Réponse entretien",
   "Notes",
 ];
-var COL = {
-  company: 1,
-  title: 2,
-  url: 4,
-  dateEnvoi: 7,
-  dateRelance: 8,
-  statut: 10,
+var HEADER = {
+  dateSent: "Date d'envoi",
+  company: "Nom de l'entreprise",
+  title: "Intitulé du poste",
+  url: "Lien fiche de poste",
+  recruiter: "Nom du recruteur Contact LinkedIn",
+  email: "E-mail",
+  phone: "N° téléphone",
+  dateApplication: "Date candidature",
+  dateFollowUp: "Date relance",
+  dateInterview: "Date d'entretien",
+  thankYouSent: "Mail de remerciement (OUI/NON)",
+  interviewResponse: "Réponse entretien",
+  notes: "Notes",
 };
-var STATUTS = ["Envoyée", "Relancée", "Entretien", "Refus", "Offre reçue", "Abandon"];
 var RELANCE_DAYS = 7;
 
 function getSheet_() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName(SHEET_NAME) || ss.getSheets()[0];
-
-  // Ajoute les en-têtes manquants (les anciens fichiers n'ont que 8 colonnes)
-  var header = sheet.getRange(1, 1, 1, HEADERS.length);
-  var current = header.getValues()[0];
-  if (current.some(function (v) { return v === ""; })) {
-    header.setValues([HEADERS.map(function (h, i) { return current[i] || h; })]);
-    header.setFontWeight("bold");
-    sheet.setFrozenRows(1);
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheets = ss.getSheets();
+  var sheet = null;
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].getSheetId() === SHEET_ID) {
+      sheet = sheets[i];
+      break;
+    }
   }
+  if (!sheet) throw new Error("L'onglet cible du tableau est introuvable.");
+
+  var lastColumn = sheet.getLastColumn();
+  if (lastColumn === 0 || sheet.getRange(1, 1, 1, lastColumn).getValues()[0]
+    .every(function (value) { return String(value || "").trim() === ""; })) {
+    sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
+    sheet.getRange(1, 1, 1, HEADERS.length).setFontWeight("bold");
+    sheet.setFrozenRows(1);
+    return sheet;
+  }
+
+  var current = sheet.getRange(1, 1, 1, lastColumn).getValues()[0];
+  var normalized = current.map(function (value) {
+    return String(value || "").trim().toLowerCase();
+  });
+  HEADERS.forEach(function (header) {
+    if (normalized.indexOf(header.toLowerCase()) !== -1) return;
+    if (header !== HEADER.notes) {
+      throw new Error('En-tête manquant dans le tableau : "' + header + '".');
+    }
+    sheet.getRange(1, lastColumn + 1).setValue(header).setFontWeight("bold");
+    normalized.push(header.toLowerCase());
+    lastColumn++;
+  });
   return sheet;
+}
+
+function getColumns_(sheet) {
+  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0]
+    .map(function (value) { return String(value || "").trim().toLowerCase(); });
+  var columns = {};
+  Object.keys(HEADER).forEach(function (key) {
+    var index = headers.indexOf(HEADER[key].toLowerCase());
+    if (index === -1) throw new Error('En-tête manquant dans le tableau : "' + HEADER[key] + '".');
+    columns[key] = index + 1;
+  });
+  return columns;
 }
 
 function jsonResponse_(obj) {
@@ -74,47 +114,61 @@ function formatDate_(date) {
 
 // Cherche une candidature déjà enregistrée (même lien, ou même entreprise + titre)
 function findDuplicate_(sheet, data) {
+  var columns = getColumns_(sheet);
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return null;
 
-  var rows = sheet.getRange(2, 1, lastRow - 1, COL.dateEnvoi).getValues();
+  var rows = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
   var url = normalizeUrl_(data.url);
   var key = normalizeKey_(data.company, data.jobTitle);
   for (var i = 0; i < rows.length; i++) {
     var row = rows[i];
-    var sameUrl = url && normalizeUrl_(row[COL.url - 1]) === url;
-    var sameKey = key && normalizeKey_(row[COL.company - 1], row[COL.title - 1]) === key;
-    if (sameUrl || sameKey) return { date: formatDate_(row[COL.dateEnvoi - 1]) };
+    var sameUrl = url && normalizeUrl_(row[columns.url - 1]) === url;
+    var sameKey = key && normalizeKey_(row[columns.company - 1], row[columns.title - 1]) === key;
+    if (sameUrl || sameKey) return { date: formatDate_(row[columns.dateApplication - 1]) };
   }
   return null;
 }
 
 function appendApplication_(sheet, data) {
-  // Date d'envoi : celle de l'extension (utile pour les envois différés hors ligne)
+  var columns = getColumns_(sheet);
+  // Les deux colonnes de date correspondent à la date de candidature choisie.
   var dateEnvoi = data.appliedAt ? new Date(data.appliedAt) : new Date();
   if (isNaN(dateEnvoi.getTime())) dateEnvoi = new Date();
   dateEnvoi.setHours(0, 0, 0, 0);
 
   var dateRelance = new Date(dateEnvoi);
   dateRelance.setDate(dateRelance.getDate() + RELANCE_DAYS);
+  var dateInterview = data.interviewDate ? new Date(data.interviewDate + "T12:00:00") : "";
+  if (dateInterview && isNaN(dateInterview.getTime())) dateInterview = "";
 
-  // De vraies dates (et non du texte) pour pouvoir trier, filtrer et colorer
-  sheet.appendRow([
-    data.company || "",
-    data.jobTitle || "",
-    data.jobType || "",
-    data.url || "",
-    data.location || "",
-    data.source || "",
-    dateEnvoi,
-    dateRelance,
-    data.applicationKind || "Offre",
-    data.status || "Envoyée",
-    data.notes || "",
-  ]);
-  sheet
-    .getRange(sheet.getLastRow(), COL.dateEnvoi, 1, 2)
-    .setNumberFormat("dd/MM/yyyy");
+  var row = new Array(sheet.getLastColumn()).fill("");
+  row[columns.dateSent - 1] = dateEnvoi;
+  row[columns.company - 1] = data.company || "";
+  row[columns.title - 1] = data.jobTitle || "";
+  row[columns.url - 1] = data.url || "";
+  row[columns.recruiter - 1] = data.recruiterName || "";
+  row[columns.email - 1] = data.email || "";
+  row[columns.phone - 1] = data.phone || "";
+  row[columns.dateApplication - 1] = dateEnvoi;
+  row[columns.dateFollowUp - 1] = dateRelance;
+  row[columns.dateInterview - 1] = dateInterview;
+  row[columns.thankYouSent - 1] = data.thankYouSent || "";
+  row[columns.interviewResponse - 1] = data.interviewResponse || "";
+  var notes = [];
+  if (data.location) notes.push("Lieu : " + data.location);
+  if (data.jobType) notes.push("Type de poste : " + data.jobType);
+  if (data.source) notes.push("Source : " + data.source);
+  if (data.applicationKind) notes.push("Type de candidature : " + data.applicationKind);
+  if (data.notes) notes.push(data.notes);
+  row[columns.notes - 1] = notes.join("\n");
+  sheet.appendRow(row);
+
+  var newRow = sheet.getLastRow();
+  [columns.dateSent, columns.dateApplication, columns.dateFollowUp, columns.dateInterview]
+    .forEach(function (column) {
+      sheet.getRange(newRow, column).setNumberFormat("dd/MM/yyyy");
+    });
 }
 
 function doPost(e) {
@@ -156,13 +210,14 @@ function doGet(e) {
     var lastRow = sheet.getLastRow();
     var items = [];
     if (lastRow >= 2) {
-      var rows = sheet.getRange(2, 1, lastRow - 1, COL.dateEnvoi).getValues();
+      var columns = getColumns_(sheet);
+      var rows = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
       items = rows.map(function (row) {
         return {
-          company: row[COL.company - 1],
-          title: row[COL.title - 1],
-          url: row[COL.url - 1],
-          date: formatDate_(row[COL.dateEnvoi - 1]),
+          company: row[columns.company - 1],
+          title: row[columns.title - 1],
+          url: row[columns.url - 1],
+          date: formatDate_(row[columns.dateApplication - 1]),
         };
       });
     }
@@ -187,39 +242,17 @@ function onOpen() {
 
 function setup() {
   var sheet = getSheet_();
+  var columns = getColumns_(sheet);
   var maxRows = sheet.getMaxRows() - 1;
-
-  // Liste déroulante pour le statut
-  sheet
-    .getRange(2, COL.statut, maxRows, 1)
-    .setDataValidation(
-      SpreadsheetApp.newDataValidation().requireValueInList(STATUTS, true).build(),
-    );
-
-  // Orange : date de relance atteinte et toujours sans réponse
-  var dataRange = sheet.getRange(2, 1, maxRows, HEADERS.length);
-  var relance = SpreadsheetApp.newConditionalFormatRule()
-    .whenFormulaSatisfied('=AND($H2<>"", $H2<=TODAY(), $J2="Envoyée")')
-    .setBackground("#fde68a")
-    .setRanges([dataRange])
-    .build();
-  var refus = SpreadsheetApp.newConditionalFormatRule()
-    .whenFormulaSatisfied('=OR($J2="Refus", $J2="Abandon")')
-    .setFontColor("#9ca3af")
-    .setRanges([dataRange])
-    .build();
-  var entretien = SpreadsheetApp.newConditionalFormatRule()
-    .whenFormulaSatisfied('=OR($J2="Entretien", $J2="Offre reçue")')
-    .setBackground("#bbf7d0")
-    .setRanges([dataRange])
-    .build();
-  sheet.setConditionalFormatRules([relance, refus, entretien]);
+  sheet.getRange(2, columns.thankYouSent, maxRows, 1).setDataValidation(
+    SpreadsheetApp.newDataValidation().requireValueInList(["OUI", "NON"], true).build(),
+  );
 }
 
 // --- Import depuis Gmail ---
 // Parcourt les e-mails de confirmation de candidature (LinkedIn, Indeed, WTTJ,
 // La Bonne Alternance, sites carrière...) et ajoute celles qui manquent.
-// Les e-mails de refus passent la candidature correspondante au statut "Refus".
+// Les refus reçus par e-mail sont indiqués dans la colonne "Réponse entretien".
 // Les fils traités reçoivent le libellé "Job Saver" et ne sont pas relus.
 
 var GMAIL_LABEL = "Job Saver";
@@ -396,23 +429,23 @@ function parseConfirmation_(message, subject, body) {
   };
 }
 
-// Passe en "Refus" la seule candidature en cours correspondant à l'expéditeur
+// Inscrit un refus dans la seule candidature correspondante, si la réponse est vide.
 function markRejected_(sheet, message, subject) {
+  var columns = getColumns_(sheet);
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return false;
 
   var sender = senderInfo_(message);
   var haystack = (subject + " " + sender.name + " " + sender.domain).toLowerCase();
-  var rows = sheet.getRange(2, 1, lastRow - 1, COL.statut).getValues();
+  var rows = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
   var matches = [];
   rows.forEach(function (row, i) {
-    var company = String(row[COL.company - 1] || "").trim().toLowerCase();
-    var statut = row[COL.statut - 1];
-    var pending = statut === "" || statut === "Envoyée" || statut === "Relancée";
-    if (company.length >= 3 && pending && haystack.indexOf(company) !== -1) matches.push(i + 2);
+    var company = String(row[columns.company - 1] || "").trim().toLowerCase();
+    var response = String(row[columns.interviewResponse - 1] || "").trim();
+    if (company.length >= 3 && !response && haystack.indexOf(company) !== -1) matches.push(i + 2);
   });
   if (matches.length !== 1) return false;
 
-  sheet.getRange(matches[0], COL.statut).setValue("Refus");
+  sheet.getRange(matches[0], columns.interviewResponse).setValue("Refus");
   return true;
 }

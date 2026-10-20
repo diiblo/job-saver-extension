@@ -1,6 +1,6 @@
-# 🚀 Job Saver - Extension Chrome
+# Job Saver — Extension Chrome de suivi des candidatures
 
-**Job Saver** enregistre vos candidatures dans un tableau Google Sheets, quel que soit le site sur lequel vous postulez : LinkedIn, Indeed, La Bonne Alternance, Welcome to the Jungle, France Travail, HelloWork, APEC, JobTeaser, sites carrière des entreprises (Workday, Lever, Greenhouse…). Les infos de l'offre sont détectées automatiquement, et les candidatures envoyées sans l'extension peuvent être rattrapées depuis vos e-mails Gmail.
+**Job Saver** est une extension Chrome qui détecte et enregistre vos candidatures dans Google Sheets. Elle récupère les informations des offres sur LinkedIn, Indeed, La Bonne Alternance, Welcome to the Jungle et de nombreux autres sites, repère les candidatures envoyées et peut importer les confirmations reçues dans Gmail.
 
 ---
 
@@ -11,10 +11,10 @@
   - Extracteurs dédiés pour LinkedIn, Indeed, La Bonne Alternance (offres **et** candidatures spontanées), Glassdoor et Welcome to the Jungle.
   - Suivi des sites qui changent d'offre sans recharger la page (liste de résultats LinkedIn, Indeed, La Bonne Alternance…). Le bouton **↻** relance la détection.
 - **Détection des candidatures :** quand un site affiche « Votre candidature a été envoyée » (ou quand vous cliquez sur « Postuler » pour partir chez le recruteur), Job Saver propose de l'enregistrer en un clic. Sur la page de confirmation d'un autre site, il reprend l'offre que vous consultiez juste avant.
-- **Import depuis Gmail :** les e-mails de confirmation (LinkedIn, Indeed, La Bonne Alternance, sites carrière…) sont ajoutés au tableau, automatiquement toutes les 6 heures si vous le souhaitez. Les e-mails de refus passent la candidature au statut « Refus ».
+- **Import depuis Gmail :** les e-mails de confirmation (LinkedIn, Indeed, La Bonne Alternance, sites carrière…) sont ajoutés au tableau, automatiquement toutes les 6 heures si vous le souhaitez. Les refus reçus par e-mail sont inscrits dans « Réponse entretien ».
 - **Pas de doublons :** une offre déjà enregistrée (même lien, ou même entreprise + intitulé) est signalée par une pastille verte et le bandeau « Déjà postulé le … ».
 - **Hors ligne :** si l'envoi échoue, la candidature est gardée et renvoyée automatiquement.
-- **Suivi dans Google Sheets :** date d'envoi, date de relance (+7 jours), statut (Envoyée, Relancée, Entretien, Refus, Offre reçue, Abandon), notes, et couleurs automatiques quand une relance est due.
+- **Suivi dans Google Sheets :** dates de candidature et de relance (+7 jours), contact recruteur, coordonnées et informations d'entretien.
 - **Menu clic droit :** sélectionnez un texte > clic droit > **Job Saver** > **Copier vers : …** pour corriger un champ.
 
 ---
@@ -40,11 +40,12 @@
 ## ⚙️ Configuration du Webhook (Côté Google Sheets)
 
 ### 1. Préparation du document Google Sheets
-1. Créez un nouveau fichier **Google Sheets** (par exemple : "Suivi des Candidatures").
-2. Nommez l'onglet **Candidatures** (sinon le premier onglet est utilisé). Les en-têtes de colonnes sont créés automatiquement :
-   *Entreprise, Titre de l'offre, Type de poste, Lien, Lieu, Source, Date d'Envoi, Date de Relance, Type de candidature, Statut, Notes.*
+Utilisez le document [TABLEAU SUIVI RECHERCHES](https://docs.google.com/spreadsheets/d/15kqAxHo9SEyP3p2zCt7PQ6Ozh8wzhbp0BcfRI3u6GR8/edit) et l'onglet correspondant au lien fourni. Le script cible explicitement ce document et cet onglet, puis vérifie les en-têtes avant d'écrire.
 
-   Un ancien tableau à 8 colonnes reste compatible : les 3 nouvelles colonnes sont ajoutées à droite.
+Les colonnes attendues sont : *Date d'envoi, Nom de l'entreprise, Intitulé du poste, Lien fiche de poste, Nom du recruteur Contact LinkedIn, E-mail, N° téléphone, Date candidature, Date relance, Date d'entretien, Mail de remerciement (OUI/NON), Réponse entretien.* La colonne **Notes** est ajoutée à la fin si elle n'existe pas.
+
+La date d'envoi et la date candidature sont remplies avec la date d'enregistrement; la date de relance est calculée à +7 jours. Le nom du recruteur est enregistré dans la colonne de contact.
+La colonne **Notes** conserve aussi les notes saisies, le lieu, le type de poste, la source et le type de candidature détectés.
 
 ### 2. Création de l'application (Apps Script)
 1. Dans Google Sheets, cliquez sur **Extensions > Apps Script**.
@@ -63,11 +64,8 @@
 
 > 🔁 **Après chaque modification de `Code.gs`** : **Déployer > Gérer les déploiements** > ✏️ > **Version : Nouvelle version** > **Déployer**. L'URL reste la même.
 
-### 4. Mise en forme du tableau
-Rechargez le Google Sheets : un menu **Job Saver** apparaît. Cliquez sur **Job Saver > Configurer le tableau** pour ajouter la liste déroulante des statuts et les couleurs :
-- 🟧 relance due (date de relance passée, statut « Envoyée ») ;
-- 🟩 entretien ou offre reçue ;
-- grisé : refus ou abandon.
+### 4. Configurer le tableau
+Rechargez le Google Sheets : un menu **Job Saver** apparaît. Cliquez sur **Job Saver > Configurer le tableau** pour ajouter la liste déroulante **OUI/NON** à la colonne « Mail de remerciement ».
 
 ### 5. Import Gmail (facultatif)
 - **Job Saver > Importer depuis Gmail (60 derniers jours)** : rattrape les candidatures passées. Google demande l'autorisation d'accéder à Gmail la première fois.

@@ -58,6 +58,38 @@ const injectedHTML = `
         <input type="text" autocomplete="off" id="jsaver-url" placeholder="https://...">
       </div>
       <div class="jsaver-group">
+        <label>Nom du recruteur</label>
+        <input type="text" autocomplete="off" id="jsaver-recruiter" placeholder="Nom du contact">
+      </div>
+      <div class="jsaver-group row-flex">
+        <div class="jsaver-half">
+          <label>E-mail</label>
+          <input type="email" autocomplete="off" id="jsaver-email" placeholder="contact@entreprise.fr">
+        </div>
+        <div class="jsaver-half">
+          <label>N° téléphone</label>
+          <input type="tel" autocomplete="off" id="jsaver-phone" placeholder="06...">
+        </div>
+      </div>
+      <div class="jsaver-group row-flex">
+        <div class="jsaver-half">
+          <label>Date d'entretien</label>
+          <input type="date" id="jsaver-interview-date">
+        </div>
+        <div class="jsaver-half">
+          <label>Mail de remerciement</label>
+          <select id="jsaver-thank-you">
+            <option value="">À renseigner</option>
+            <option value="OUI">OUI</option>
+            <option value="NON">NON</option>
+          </select>
+        </div>
+      </div>
+      <div class="jsaver-group">
+        <label>Réponse entretien</label>
+        <textarea autocomplete="off" id="jsaver-interview-response" rows="2" placeholder="Retour après l'entretien..."></textarea>
+      </div>
+      <div class="jsaver-group">
         <label>Notes</label>
         <textarea autocomplete="off" id="jsaver-notes" rows="2" placeholder="Contact, salaire, remarques..."></textarea>
       </div>
@@ -141,6 +173,12 @@ function initJobSaver() {
     source: $("jsaver-source"),
     applicationKind: $("jsaver-kind"),
     url: $("jsaver-url"),
+    recruiterName: $("jsaver-recruiter"),
+    email: $("jsaver-email"),
+    phone: $("jsaver-phone"),
+    interviewDate: $("jsaver-interview-date"),
+    thankYouSent: $("jsaver-thank-you"),
+    interviewResponse: $("jsaver-interview-response"),
     notes: $("jsaver-notes"),
   };
   const autoKeys = ["company", "title", "location", "jobType", "source", "applicationKind", "url"];
@@ -238,9 +276,15 @@ function initJobSaver() {
   });
 
   function resetForm() {
-    for (const key of ["company", "title", "location", "source", "notes"]) inputs[key].value = "";
+    for (const key of [
+      "company", "title", "location", "source", "recruiterName", "email",
+      "phone", "interviewDate", "interviewResponse", "notes",
+    ]) {
+      inputs[key].value = "";
+    }
     inputs.jobType.selectedIndex = 0;
     inputs.applicationKind.selectedIndex = 0;
+    inputs.thankYouSent.selectedIndex = 0;
     autoValues = {};
     forceNext = false;
   }
@@ -254,6 +298,12 @@ function initJobSaver() {
       source: inputs.source.value.trim(),
       applicationKind: inputs.applicationKind.value,
       url: inputs.url.value.trim(),
+      recruiterName: inputs.recruiterName.value.trim(),
+      email: inputs.email.value.trim(),
+      phone: inputs.phone.value.trim(),
+      interviewDate: inputs.interviewDate.value,
+      thankYouSent: inputs.thankYouSent.value,
+      interviewResponse: inputs.interviewResponse.value.trim(),
       notes: inputs.notes.value.trim(),
       appliedAt: new Date().toISOString(),
     };
