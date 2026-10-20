@@ -77,7 +77,14 @@
   color: #111827;
 }
 
-#jsaver-close-btn {
+.jsaver-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+#jsaver-close-btn,
+#jsaver-detect-btn {
   background: none;
   border: none;
   cursor: pointer;
@@ -86,7 +93,12 @@
   padding: 0 4px;
 }
 
-#jsaver-close-btn:hover {
+#jsaver-detect-btn {
+  font-size: 17px;
+}
+
+#jsaver-close-btn:hover,
+#jsaver-detect-btn:hover {
   color: #111827;
 }
 

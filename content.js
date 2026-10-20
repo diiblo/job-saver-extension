@@ -8,7 +8,10 @@ const injectedHTML = `
   <div id="jsaver-panel">
     <div class="jsaver-header">
       <h3>Job Saver</h3>
-      <button id="jsaver-close-btn">&times;</button>
+      <div class="jsaver-header-actions">
+        <button id="jsaver-detect-btn" title="Re-détecter les infos de la page">&#x21bb;</button>
+        <button id="jsaver-close-btn">&times;</button>
+      </div>
     </div>
     <div class="jsaver-body">
       <div class="jsaver-group">
@@ -71,23 +74,48 @@ function initJobSaver() {
   const inUrl = document.getElementById("jsaver-url");
   const statusDiv = document.getElementById("jsaver-status");
 
-  // URL courante. Les sites comme LinkedIn, Indeed ou La Bonne Alternance changent
-  // d'offre sans recharger la page : on suit donc les changements d'URL.
+  const detectBtn = document.getElementById("jsaver-detect-btn");
+  const autoFields = { company: inCompany, title: inTitle, location: inLocation, source: inSource, url: inUrl };
+
+  // Dernières valeurs détectées : un champ qui les contient encore n'a pas été
+  // modifié à la main et peut être mis à jour quand on change d'offre.
+  let autoValues = {};
+  let typeTouched = false;
+  inType.addEventListener("change", () => { typeTouched = true; });
+
+  function autofill(force) {
+    const data = JobSaverExtract.extract();
+    for (const [key, input] of Object.entries(autoFields)) {
+      const value = data[key];
+      if (!value) continue;
+      if (force || !input.value || input.value === autoValues[key]) input.value = value;
+      autoValues[key] = value;
+    }
+    if (data.jobType && (force || !typeTouched)) {
+      inType.value = data.jobType;
+      typeTouched = false;
+    }
+  }
+
+  // Les sites comme LinkedIn, Indeed ou La Bonne Alternance changent d'offre
+  // sans recharger la page : on suit les changements d'URL et on re-détecte
+  // une fois le contenu de la nouvelle offre affiché.
   let lastHref = window.location.href;
-  inUrl.value = lastHref;
+  autofill(false);
 
   setInterval(() => {
     if (window.location.href === lastHref) return;
-    // On ne remplace le lien que s'il n'a pas été modifié à la main
-    if (inUrl.value === lastHref) inUrl.value = window.location.href;
     lastHref = window.location.href;
+    setTimeout(() => autofill(false), 1500);
   }, 1000);
 
   toggleBtn.addEventListener("click", () => {
-    if (!inUrl.value) inUrl.value = window.location.href;
+    autofill(false);
     wrapper.classList.remove("jsaver-closed");
     wrapper.classList.add("jsaver-open");
   });
+
+  detectBtn.addEventListener("click", () => autofill(true));
 
   closeBtn.addEventListener("click", () => {
     wrapper.classList.remove("jsaver-open");
@@ -102,6 +130,8 @@ function initJobSaver() {
     inLocation.value = "";
     inSource.value = "";
     inType.selectedIndex = 0;
+    autoValues = {};
+    typeTouched = false;
   }
 
   sendBtn.addEventListener("click", () => {
