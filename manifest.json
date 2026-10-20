@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "name": "Job Saver",
-  "version": "2.0",
-  "description": "Sauvegarde facilement les offres d'emploi dans Google Sheets avec panneau flottant.",
-  "permissions": ["contextMenus", "storage", "activeTab"],
+  "version": "3.0",
+  "description": "Enregistre automatiquement vos candidatures (LinkedIn, Indeed, La Bonne Alternance, WTTJ...) dans Google Sheets.",
+  "permissions": ["contextMenus", "storage", "activeTab", "alarms"],
   "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js"
@@ -11,11 +11,22 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "css": ["content.css"],
-      "js": ["content.js"],
+      "js": ["extractors.js", "content.js"],
       "run_at": "document_end"
     }
   ],
+  "web_accessible_resources": [
+    {
+      "resources": ["content.css"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "commands": {
+    "toggle-panel": {
+      "suggested_key": { "default": "Alt+Shift+J" },
+      "description": "Ouvrir / fermer le panneau Job Saver"
+    }
+  },
   "action": {
     "default_popup": "popup.html",
     "default_icon": {

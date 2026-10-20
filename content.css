@@ -1,4 +1,8 @@
-/* Isolation des styles pour éviter les conflits CSS avec la page hôte */
+/* Feuille chargée dans le Shadow DOM du panneau : on coupe l'héritage des styles de la page */
+:host {
+  all: initial;
+}
+
 #job-saver-wrapper {
   position: fixed;
   bottom: 20px;
@@ -26,6 +30,42 @@
   justify-content: center;
   align-items: center;
   transition: transform 0.2s, background-color 0.2s;
+}
+
+/* Pastille verte : offre déjà enregistrée */
+#jsaver-toggle-btn {
+  position: relative;
+}
+
+#jsaver-applied-dot {
+  display: none;
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background-color: #10b981;
+  border: 2px solid #fff;
+}
+
+.jsaver-applied #jsaver-applied-dot {
+  display: block;
+}
+
+#jsaver-already {
+  display: none;
+  margin-bottom: 12px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background-color: #d1fae5;
+  color: #065f46;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+#jsaver-already.visible {
+  display: block;
 }
 
 #jsaver-toggle-btn:hover {
@@ -56,8 +96,15 @@
   pointer-events: auto;
 }
 
-.jsaver-open #jsaver-toggle-btn {
+.jsaver-open #jsaver-toggle-btn,
+.jsaver-button-hidden #jsaver-toggle-btn {
   display: none;
+}
+
+/* Bouton masqué : le panneau s'ouvre au même endroit */
+.jsaver-button-hidden #jsaver-panel,
+.jsaver-button-hidden #jsaver-toast {
+  bottom: 0;
 }
 
 /* Header */
@@ -77,7 +124,14 @@
   color: #111827;
 }
 
-#jsaver-close-btn {
+.jsaver-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+#jsaver-close-btn,
+#jsaver-detect-btn {
   background: none;
   border: none;
   cursor: pointer;
@@ -86,7 +140,12 @@
   padding: 0 4px;
 }
 
-#jsaver-close-btn:hover {
+#jsaver-detect-btn {
+  font-size: 17px;
+}
+
+#jsaver-close-btn:hover,
+#jsaver-detect-btn:hover {
   color: #111827;
 }
 
@@ -165,6 +224,66 @@
 #jsaver-send-btn:disabled {
   background-color: #9ca3af;
   cursor: not-allowed;
+}
+
+/* Proposition d'enregistrement après une candidature */
+#jsaver-toast {
+  display: none;
+  position: absolute;
+  bottom: 60px;
+  right: 0;
+  width: 280px;
+  padding: 12px;
+  background-color: #111827;
+  color: #f9fafb;
+  border-radius: 10px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+  font-size: 13px;
+}
+
+#jsaver-toast.visible {
+  display: block;
+}
+
+.jsaver-open #jsaver-toast {
+  display: none;
+}
+
+#jsaver-toast-msg {
+  white-space: pre-line;
+  margin-bottom: 10px;
+  line-height: 1.4;
+}
+
+.jsaver-toast-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.jsaver-toast-actions button {
+  border: none;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+#jsaver-toast-save {
+  flex: 1;
+  background-color: #3b82f6;
+  color: #fff;
+}
+
+#jsaver-toast-edit {
+  background-color: #374151;
+  color: #f9fafb;
+}
+
+#jsaver-toast-close {
+  background: none;
+  color: #9ca3af;
+  font-size: 16px;
 }
 
 #jsaver-status {
