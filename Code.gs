@@ -178,6 +178,10 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("Job Saver")
     .addItem("Configurer le tableau", "setup")
+    .addSeparator()
+    .addItem("Importer depuis Gmail (60 derniers jours)", "importFromGmailFull")
+    .addItem("Activer l'import Gmail automatique", "installGmailTrigger")
+    .addItem("Désactiver l'import Gmail automatique", "removeGmailTrigger")
     .addToUi();
 }
 
@@ -210,4 +214,205 @@ function setup() {
     .setRanges([dataRange])
     .build();
   sheet.setConditionalFormatRules([relance, refus, entretien]);
+}
+
+// --- Import depuis Gmail ---
+// Parcourt les e-mails de confirmation de candidature (LinkedIn, Indeed, WTTJ,
+// La Bonne Alternance, sites carrière...) et ajoute celles qui manquent.
+// Les e-mails de refus passent la candidature correspondante au statut "Refus".
+// Les fils traités reçoivent le libellé "Job Saver" et ne sont pas relus.
+
+var GMAIL_LABEL = "Job Saver";
+var GMAIL_SEARCH =
+  '("votre candidature" OR "your application" OR "candidature envoyée" OR ' +
+  '"merci pour votre candidature" OR "thank you for applying" OR "thanks for applying" OR ' +
+  '"application received" OR "application submitted")';
+
+var CONFIRM_RE = /(candidature|application)[^.\n]{0,60}(envoyée|bien reçue|reçue|transmise|enregistrée|prise en compte|received|submitted|sent)|merci (pour|de) votre candidature|thanks? (you )?for (your application|applying)/i;
+var REJECT_RE = /malheureusement|nous regrettons|n'avons pas retenu|pas été retenue?|ne pas donner suite|pas pouvoir donner suite|unfortunately|not (been )?selected|not moving forward|regret to inform/i;
+// Alertes et newsletters : pas des candidatures
+var IGNORE_RE = /alerte|job alert|offres? recommandées?|nouvelles offres|newsletter|webinar|complétez votre candidature|finish your application|candidature incomplète/i;
+
+var SENDER_SOURCES = [
+  [/linkedin\./, "LinkedIn"],
+  [/indeed\./, "Indeed"],
+  [/welcometothejungle\.|welcomekit\./, "Welcome to the Jungle"],
+  [/apprentissage\.beta\.gouv\.fr|labonnealternance/, "La Bonne Alternance"],
+  [/francetravail\.|pole-emploi\./, "France Travail"],
+  [/hellowork\./, "HelloWork"],
+  [/apec\.fr/, "APEC"],
+  [/jobteaser\./, "JobTeaser"],
+  [/glassdoor\./, "Glassdoor"],
+  [/myworkday|workday\./, "Workday"],
+  [/lever\.co/, "Lever"],
+  [/greenhouse\./, "Greenhouse"],
+  [/smartrecruiters\./, "SmartRecruiters"],
+  [/teamtailor\./, "Teamtailor"],
+];
+var JOBBOARD_SENDER = /linkedin|indeed|welcometothejungle|welcomekit|apprentissage\.beta|francetravail|pole-emploi|hellowork|apec|jobteaser|glassdoor|workday|lever\.co|greenhouse|smartrecruiters|teamtailor|noreply|no-reply|ne-pas-repondre/i;
+
+function importFromGmailFull() {
+  var result = importFromGmail(60);
+  SpreadsheetApp.getUi().alert(
+    "Import Gmail terminé : " + result.added + " candidature(s) ajoutée(s), " +
+      result.rejected + " refus mis à jour.",
+  );
+}
+
+function importFromGmailRecent() {
+  importFromGmail(3);
+}
+
+function installGmailTrigger() {
+  removeGmailTrigger();
+  ScriptApp.newTrigger("importFromGmailRecent").timeBased().everyHours(6).create();
+  SpreadsheetApp.getUi().alert("Import Gmail automatique activé (toutes les 6 heures).");
+}
+
+function removeGmailTrigger() {
+  ScriptApp.getProjectTriggers().forEach(function (trigger) {
+    if (trigger.getHandlerFunction() === "importFromGmailRecent") ScriptApp.deleteTrigger(trigger);
+  });
+}
+
+function importFromGmail(days) {
+  var label = GmailApp.getUserLabelByName(GMAIL_LABEL) || GmailApp.createLabel(GMAIL_LABEL);
+  var query = "newer_than:" + days + 'd -label:"' + GMAIL_LABEL + '" ' + GMAIL_SEARCH;
+  var threads = GmailApp.search(query, 0, 200);
+  var sheet = getSheet_();
+  var added = 0;
+  var rejected = 0;
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    threads.forEach(function (thread) {
+      var message = thread.getMessages()[0];
+      var subject = message.getSubject() || "";
+      var body = message.getPlainBody().slice(0, 4000);
+      var text = subject + "\n" + body;
+
+      if (IGNORE_RE.test(subject)) {
+        // Pas une candidature : fil non marqué, au cas où une réponse arriverait dedans
+      } else if (REJECT_RE.test(text)) {
+        if (markRejected_(sheet, message, subject)) rejected++;
+        thread.addLabel(label);
+      } else if (CONFIRM_RE.test(text)) {
+        var data = parseConfirmation_(message, subject, body);
+        if (!findDuplicate_(sheet, data)) {
+          appendApplication_(sheet, data);
+          added++;
+        }
+        thread.addLabel(label);
+      }
+    });
+  } finally {
+    lock.releaseLock();
+  }
+  return { added: added, rejected: rejected };
+}
+
+function senderInfo_(message) {
+  var from = message.getFrom();
+  var match = from.match(/^\s*"?([^"<]*)"?\s*<([^>]+)>/);
+  var name = match ? match[1].trim() : "";
+  var email = (match ? match[2] : from).trim().toLowerCase();
+  return { name: name, email: email, domain: email.split("@")[1] || "" };
+}
+
+function cleanPart_(text) {
+  return String(text || "")
+    .replace(/\s+/g, " ")
+    .replace(/^[\s:–—-]+|[\s.!:–—-]+$/g, "")
+    .trim();
+}
+
+// Déduit entreprise et intitulé de l'objet et du corps de l'e-mail
+function parseConfirmation_(message, subject, body) {
+  var sender = senderInfo_(message);
+  var company = "";
+  var title = "";
+  var m;
+  // Ex. "Iris, votre candidature a été envoyée à Capgemini" (LinkedIn)
+  if ((m = subject.match(/candidature a été envoyée (?:à|chez) (.+)$/i))) company = m[1];
+  // Ex. "Votre candidature au poste de Développeur chez Acme" / "pour l'offre ..."
+  if ((m = subject.match(/candidature (?:au poste d[e'] ?|pour (?:le poste d[e'] ?|l'offre ?)?|:)\s*(.+?)(?: (?:chez|à|@) (.+))?$/i))) {
+    title = m[1];
+    company = company || m[2] || "";
+  }
+  // Ex. "Votre candidature chez Acme"
+  if (!company && (m = subject.match(/candidature (?:chez|à|auprès de) (.+)$/i))) company = m[1];
+  // Ex. "Your application for Developer at Acme" / "Thank you for applying to Acme"
+  if ((m = subject.match(/application (?:for|to) (?:the )?(.+?)(?: (?:at|with) (.+))?$/i))) {
+    title = title || m[1];
+    company = company || m[2] || "";
+  }
+  if (!company && (m = subject.match(/(?:applying|apply) (?:to|at) (.+)$/i))) company = m[1];
+  // Indeed : "Candidature envoyée : Intitulé" puis l'entreprise dans le corps
+  if (!title && (m = subject.match(/candidature envoyée\s*:\s*(.+)$/i))) title = m[1];
+  if (!company && (m = body.match(/(?:chez|auprès de) ([A-Z0-9][^\n,.]{1,60})/))) company = m[1];
+  if (!title && (m = body.match(/(?:application for(?: the)?|candidature (?:au poste de|pour le poste de|pour l'offre))\s*:?\s*([^\n.]{3,80})/i))) {
+    title = m[1].replace(/ (?:at|chez) .+$/i, "");
+  }
+  // LinkedIn : l'intitulé du poste est la première ligne du message
+  if (!title && /linkedin\./.test(sender.domain)) {
+    title = body.split("\n").map(cleanPart_).filter(Boolean)[0] || "";
+  }
+  // Site carrière d'une entreprise : le nom de l'expéditeur est souvent celui de l'entreprise
+  if (!company && sender.name && !JOBBOARD_SENDER.test(sender.email + " " + sender.name)) company = sender.name;
+
+  var source = "Gmail";
+  for (var i = 0; i < SENDER_SOURCES.length; i++) {
+    if (SENDER_SOURCES[i][0].test(sender.domain)) {
+      source = SENDER_SOURCES[i][1];
+      break;
+    }
+  }
+
+  var text = (subject + " " + body.slice(0, 1500)).toLowerCase();
+  var jobType = "";
+  if (/altern|apprenti|contrat (de )?pro/.test(text) || source === "La Bonne Alternance") jobType = "Alternance";
+  else if (/\bstages?\b|stagiaire|internship|\bintern\b/.test(text)) jobType = "Stage";
+  else if (/\bcdd\b/.test(text)) jobType = "CDD";
+  else if (/\bcdi\b/.test(text)) jobType = "CDI";
+
+  var offerUrl = (body.match(/https?:\/\/[^\s>)"]*(?:\/jobs?\/view\/\d+|viewjob\?jk=\w+|\/emploi\/[^\s>)"?]+|\/offres?\/[^\s>)"?]+)/i) || [])[0];
+  // Même format de lien que l'extension, pour détecter les doublons
+  if (offerUrl && (m = offerUrl.match(/linkedin\.com\/.*jobs\/view\/(\d+)/))) {
+    offerUrl = "https://www.linkedin.com/jobs/view/" + m[1] + "/";
+  }
+
+  var spontaneous = /spontanée/i.test(text);
+  return {
+    company: cleanPart_(company),
+    jobTitle: cleanPart_(title) || (spontaneous ? "Candidature spontanée" : cleanPart_(subject)),
+    jobType: jobType,
+    url: offerUrl || "https://mail.google.com/mail/u/0/#all/" + message.getThread().getId(),
+    location: "",
+    source: source,
+    appliedAt: message.getDate().toISOString(),
+    applicationKind: spontaneous ? "Candidature spontanée" : "Offre",
+    notes: "Importé depuis Gmail : " + subject,
+  };
+}
+
+// Passe en "Refus" la seule candidature en cours correspondant à l'expéditeur
+function markRejected_(sheet, message, subject) {
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return false;
+
+  var sender = senderInfo_(message);
+  var haystack = (subject + " " + sender.name + " " + sender.domain).toLowerCase();
+  var rows = sheet.getRange(2, 1, lastRow - 1, COL.statut).getValues();
+  var matches = [];
+  rows.forEach(function (row, i) {
+    var company = String(row[COL.company - 1] || "").trim().toLowerCase();
+    var statut = row[COL.statut - 1];
+    var pending = statut === "" || statut === "Envoyée" || statut === "Relancée";
+    if (company.length >= 3 && pending && haystack.indexOf(company) !== -1) matches.push(i + 2);
+  });
+  if (matches.length !== 1) return false;
+
+  sheet.getRange(matches[0], COL.statut).setValue("Refus");
+  return true;
 }
