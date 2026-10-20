@@ -160,7 +160,9 @@
   }
 
   function fromMeta() {
-    const h1 = document.querySelector("h1");
+    // Les <h1> d'en-tête (logo, nom du compte connecté) ne sont pas des intitulés d'offre
+    const h1 = [...document.querySelectorAll("h1")].find((el) =>
+      !el.closest("header, nav, [role='banner'], [role='navigation']") && clean(el.textContent));
     return {
       title: clean(h1 && h1.textContent) || meta("og:title") || clean(document.title),
     };
@@ -170,12 +172,35 @@
   // Les classes CSS de ces sites changent régulièrement : chaque champ essaie
   // plusieurs sélecteurs, et les données JobPosting restent en repli.
 
+  // Document de la page + iframes du même site (Indeed affiche parfois l'offre dans une iframe)
+  function documents() {
+    const docs = [document];
+    for (const frame of document.querySelectorAll("iframe")) {
+      try {
+        if (frame.contentDocument) docs.push(frame.contentDocument);
+      } catch (e) { /* iframe d'un autre site : inaccessible */ }
+    }
+    return docs;
+  }
+
   function text(...selectors) {
+    const docs = documents();
     for (const selector of selectors) {
-      for (const el of document.querySelectorAll(selector)) {
-        const value = clean(el.innerText || el.textContent);
-        if (value) return value;
+      for (const doc of docs) {
+        for (const el of doc.querySelectorAll(selector)) {
+          const value = clean(el.innerText || el.textContent);
+          if (value) return value;
+        }
       }
+    }
+    return "";
+  }
+
+  function textIn(root, ...selectors) {
+    for (const selector of selectors) {
+      const el = root.querySelector(selector);
+      const value = el && clean(el.getAttribute("title") || el.innerText || el.textContent);
+      if (value) return value;
     }
     return "";
   }
@@ -220,19 +245,33 @@
     {
       match: /(^|\.)indeed\./,
       extract() {
-        const title = text(
+        // Liste de résultats : la carte de l'offre sélectionnée (identifiant vjk/jk de l'URL)
+        // est la source la plus fiable, le panneau de droite pouvant être encore en chargement.
+        const params = new URLSearchParams(location.search);
+        const jk = params.get("vjk") || params.get("jk");
+        const link = jk && document.querySelector(`a[data-jk="${CSS.escape(jk)}"], [data-jk="${CSS.escape(jk)}"]`);
+        const card = link && (link.closest(".job_seen_beacon, .cardOutline, .resultContent, li") || link.parentElement);
+        const fromCard = card ? {
+          title: textIn(card, "h2.jobTitle span[title]", "[id^='jobTitle-']", "h2.jobTitle", ".jobTitle"),
+          company: textIn(card, '[data-testid="company-name"]', ".companyName"),
+          location: textIn(card, '[data-testid="text-location"]', ".companyLocation"),
+        } : {};
+
+        // Panneau de l'offre (ou page /viewjob). Le titre contient un suffixe masqué "- job post".
+        const paneTitle = text(
           '[data-testid="jobsearch-JobInfoHeader-title"]',
           ".jobsearch-JobInfoHeader-title"
-        ).replace(/\s*-\s*(job post|offre d'emploi)$/i, "");
+        ).replace(/\s*[-–]\s*(job post|offre d['’]emploi)\s*$/i, "");
         return {
-          title,
-          company: text(
+          title: fromCard.title || paneTitle,
+          company: fromCard.company || text(
             '[data-testid="inlineHeader-companyName"]',
             '[data-company-name="true"]',
             ".jobsearch-CompanyInfoContainer a"
           ),
-          location: text(
+          location: fromCard.location || text(
             '[data-testid="inlineHeader-companyLocation"]',
+            '[data-testid="jobsearch-JobInfoHeader-companyLocation"]',
             '[data-testid="job-location"]',
             "#jobLocationText"
           ),
@@ -287,18 +326,22 @@
     },
   ];
 
+  function siteExtractor() {
+    return siteExtractors.find(({ match }) => match.test(location.hostname));
+  }
+
   function fromSite() {
-    for (const { match, extract } of siteExtractors) {
-      if (!match.test(location.hostname)) continue;
-      try { return extract() || {}; } catch (e) { return {}; }
-    }
-    return {};
+    const extractor = siteExtractor();
+    if (!extractor) return {};
+    try { return extractor.extract() || {}; } catch (e) { return {}; }
   }
 
   function extract() {
     const site = fromSite();
     const ld = fromJsonLd();
-    const fallback = fromMeta();
+    // Sur les sites avec extracteur dédié, le titre de page ou le premier <h1>
+    // donnerait n'importe quoi (nom du compte, "Offres d'emploi"...) : pas de repli
+    const fallback = siteExtractor() ? {} : fromMeta();
     const pick = (key) => site[key] || ld[key] || fallback[key] || "";
 
     const source = site.source || detectSource(location.hostname);

@@ -18,16 +18,16 @@ const injectedHTML = `
       <div id="jsaver-already"></div>
       <div class="jsaver-group">
         <label>Entreprise</label>
-        <input type="text" id="jsaver-company" placeholder="Nom de la boîte">
+        <input type="text" autocomplete="off" id="jsaver-company" placeholder="Nom de la boîte">
       </div>
       <div class="jsaver-group">
         <label>Titre de l'offre</label>
-        <input type="text" id="jsaver-title" placeholder="Intitulé du poste">
+        <input type="text" autocomplete="off" id="jsaver-title" placeholder="Intitulé du poste">
       </div>
       <div class="jsaver-group row-flex">
         <div class="jsaver-half">
           <label>Lieu</label>
-          <input type="text" id="jsaver-location" placeholder="Ex: Paris">
+          <input type="text" autocomplete="off" id="jsaver-location" placeholder="Ex: Paris">
         </div>
         <div class="jsaver-half">
           <label>Type de poste</label>
@@ -43,7 +43,7 @@ const injectedHTML = `
       <div class="jsaver-group row-flex">
         <div class="jsaver-half">
           <label>Source</label>
-          <input type="text" id="jsaver-source" placeholder="Ex: LinkedIn">
+          <input type="text" autocomplete="off" id="jsaver-source" placeholder="Ex: LinkedIn">
         </div>
         <div class="jsaver-half">
           <label>Candidature</label>
@@ -55,11 +55,11 @@ const injectedHTML = `
       </div>
       <div class="jsaver-group">
         <label>Lien de l'offre</label>
-        <input type="text" id="jsaver-url" placeholder="https://...">
+        <input type="text" autocomplete="off" id="jsaver-url" placeholder="https://...">
       </div>
       <div class="jsaver-group">
         <label>Notes</label>
-        <textarea id="jsaver-notes" rows="2" placeholder="Contact, salaire, remarques..."></textarea>
+        <textarea autocomplete="off" id="jsaver-notes" rows="2" placeholder="Contact, salaire, remarques..."></textarea>
       </div>
       <button id="jsaver-send-btn">Sauvegarder</button>
       <div id="jsaver-status"></div>
@@ -168,8 +168,14 @@ function initJobSaver() {
     const data = JobSaverExtract.extract();
     for (const key of autoKeys) {
       const value = data[key];
-      if (!value) continue;
       const input = inputs[key];
+      if (!value) {
+        // Rien de détecté sur la nouvelle offre : on vide la valeur de l'offre précédente
+        // (sauf si elle a été saisie à la main)
+        if (input.tagName !== "SELECT" && autoValues[key] && input.value === autoValues[key]) input.value = "";
+        delete autoValues[key];
+        continue;
+      }
       const untouched = !input.value || input.value === autoValues[key] || input.tagName === "SELECT" && !autoValues[key];
       if (force || untouched) input.value = value;
       autoValues[key] = value;
