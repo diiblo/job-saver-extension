@@ -3,7 +3,7 @@
   "name": "Job Saver",
   "version": "2.0",
   "description": "Sauvegarde facilement les offres d'emploi dans Google Sheets avec panneau flottant.",
-  "permissions": ["contextMenus", "storage", "activeTab"],
+  "permissions": ["contextMenus", "storage", "activeTab", "alarms"],
   "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js"

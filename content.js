@@ -71,10 +71,20 @@ function initJobSaver() {
   const inUrl = document.getElementById("jsaver-url");
   const statusDiv = document.getElementById("jsaver-status");
 
-  // Remplir automatiquement l'URL courante au 1er clic si vide
-  inUrl.value = window.location.href;
+  // URL courante. Les sites comme LinkedIn, Indeed ou La Bonne Alternance changent
+  // d'offre sans recharger la page : on suit donc les changements d'URL.
+  let lastHref = window.location.href;
+  inUrl.value = lastHref;
+
+  setInterval(() => {
+    if (window.location.href === lastHref) return;
+    // On ne remplace le lien que s'il n'a pas été modifié à la main
+    if (inUrl.value === lastHref) inUrl.value = window.location.href;
+    lastHref = window.location.href;
+  }, 1000);
 
   toggleBtn.addEventListener("click", () => {
+    if (!inUrl.value) inUrl.value = window.location.href;
     wrapper.classList.remove("jsaver-closed");
     wrapper.classList.add("jsaver-open");
   });
@@ -86,57 +96,54 @@ function initJobSaver() {
     statusDiv.className = "";
   });
 
+  function resetForm() {
+    inCompany.value = "";
+    inTitle.value = "";
+    inLocation.value = "";
+    inSource.value = "";
+    inType.selectedIndex = 0;
+  }
+
   sendBtn.addEventListener("click", () => {
-    chrome.storage.local.get("webhookUrl", (data) => {
-      const webhookUrl = data.webhookUrl;
-      if (!webhookUrl) {
+    const payload = {
+      company: inCompany.value.trim(),
+      jobTitle: inTitle.value.trim(),
+      location: inLocation.value.trim(),
+      jobType: inType.value,
+      source: inSource.value.trim(),
+      url: inUrl.value.trim(),
+      appliedAt: new Date().toISOString()
+    };
+
+    if (!payload.company && !payload.jobTitle && !payload.url) {
+      showStatus("Aucune donnée à envoyer.", "error");
+      return;
+    }
+
+    sendBtn.disabled = true;
+    sendBtn.textContent = "Envoi...";
+    statusDiv.textContent = "";
+
+    chrome.runtime.sendMessage({ action: "saveJob", payload }, (result) => {
+      sendBtn.disabled = false;
+      sendBtn.textContent = "Sauvegarder";
+
+      if (chrome.runtime.lastError || !result) {
+        showStatus("❌ Extension indisponible, rechargez la page.", "error");
+        return;
+      }
+      if (result.status === "success") {
+        showStatus("✅ Sauvegardé avec succès !", "success");
+        resetForm();
+        setTimeout(() => closeBtn.click(), 2000);
+      } else if (result.status === "queued") {
+        showStatus("📥 Pas de connexion : candidature gardée, renvoi automatique.", "success");
+        resetForm();
+      } else if (result.status === "noConfig") {
         showStatus("⚠️ Configurez l'URL Webhook via l'icône de l'extension !", "error");
-        return;
+      } else {
+        showStatus("❌ Erreur Scripts : " + result.message, "error");
       }
-
-      const payload = {
-        company: inCompany.value.trim(),
-        jobTitle: inTitle.value.trim(),
-        location: inLocation.value.trim(),
-        jobType: inType.value,
-        source: inSource.value.trim(),
-        url: inUrl.value.trim()
-      };
-
-      if (!payload.company && !payload.jobTitle && !payload.url) {
-        showStatus("Aucune donnée à envoyer.", "error");
-        return;
-      }
-
-      sendBtn.disabled = true;
-      sendBtn.textContent = "Recherche...";
-      statusDiv.textContent = "";
-
-      fetch(webhookUrl, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify(payload)
-      })
-      .then(res => res.json())
-      .then(result => {
-        if (result.status === "success") {
-          showStatus("✅ Sauvegardé avec succès !", "success");
-          inCompany.value = "";
-          inTitle.value = "";
-          inLocation.value = "";
-          inSource.value = "";
-          setTimeout(() => closeBtn.click(), 2000);
-        } else {
-          showStatus("❌ Erreur Scripts : " + result.message, "error");
-        }
-      })
-      .catch(err => {
-        showStatus("❌ Erreur. Vérifiez l'URL de l'App Script.", "error");
-      })
-      .finally(() => {
-        sendBtn.disabled = false;
-        sendBtn.textContent = "Sauvegarder";
-      });
     });
   });
 

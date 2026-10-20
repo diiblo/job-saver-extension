@@ -1,77 +1,78 @@
 // Ce code est à copier/coller dans l'éditeur de script de votre Google Sheet
 // Outils (ou Extensions) > Apps Script
 
-function doPost(e) {
-  // Préparation de la réponse (CORS)
-  var headers = {
-    "Access-Control-Allow-Origin": "*",
-    "Content-Type": "application/json",
-  };
+// Onglet utilisé. S'il n'existe pas, le premier onglet du fichier est utilisé.
+var SHEET_NAME = "Candidatures";
+var HEADERS = [
+  "Entreprise",
+  "Titre de l'offre",
+  "Type de poste",
+  "Lien",
+  "Lieu",
+  "Source",
+  "Date d'Envoi",
+  "Date de Relance",
+];
+var COL_DATE_ENVOI = 7;
+var RELANCE_DAYS = 7;
 
+function getSheet_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(SHEET_NAME) || ss.getSheets()[0];
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(HEADERS);
+    sheet.getRange(1, 1, 1, HEADERS.length).setFontWeight("bold");
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+function jsonResponse_(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(
+    ContentService.MimeType.JSON,
+  );
+}
+
+function doPost(e) {
+  // Évite que deux envois simultanés écrivent sur la même ligne
+  var lock = LockService.getScriptLock();
   try {
+    lock.waitLock(10000);
+
     // Parser les données envoyées par l'extension
     var data = JSON.parse(e.postData.contents);
 
-    var company = data.company || "";
-    var jobTitle = data.jobTitle || "";
-    var location = data.location || "";
-    var jobType = data.jobType || "";
-    var source = data.source || "";
-    var url = data.url || "";
-    // Calcul de la Date d'Envoi (Aujourd'hui)
-    var dateEnvoiObj = new Date();
-    var formattedDateEnvoi = Utilities.formatDate(
-      dateEnvoiObj,
-      Session.getScriptTimeZone(),
-      "dd/MM/yyyy",
-    );
+    // Date d'envoi : celle de l'extension (utile pour les envois différés hors ligne)
+    var dateEnvoi = data.appliedAt ? new Date(data.appliedAt) : new Date();
+    if (isNaN(dateEnvoi.getTime())) dateEnvoi = new Date();
+    dateEnvoi.setHours(0, 0, 0, 0);
 
-    // Calcul de la Date de Relance (+7 jours)
-    var dateRelanceObj = new Date(dateEnvoiObj);
-    dateRelanceObj.setDate(dateRelanceObj.getDate() + 7);
-    var formattedDateRelance = Utilities.formatDate(
-      dateRelanceObj,
-      Session.getScriptTimeZone(),
-      "dd/MM/yyyy",
-    );
+    var dateRelance = new Date(dateEnvoi);
+    dateRelance.setDate(dateRelance.getDate() + RELANCE_DAYS);
 
-    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    var sheet = getSheet_();
 
-    // Insérer la ligne à la fin du tableau dans l'ordre exact demandé :
-    // 1: Entreprise, 2: Titre, 3: Type, 4: Lien, 5: Lieu, 6: Source, 7: Date Envoi, 8: Date Relance
+    // De vraies dates (et non du texte) pour pouvoir trier, filtrer et colorer
     var newRow = [
-      company,
-      jobTitle,
-      jobType,
-      url,
-      location,
-      source,
-      formattedDateEnvoi,
-      formattedDateRelance,
+      data.company || "",
+      data.jobTitle || "",
+      data.jobType || "",
+      data.url || "",
+      data.location || "",
+      data.source || "",
+      dateEnvoi,
+      dateRelance,
     ];
 
     sheet.appendRow(newRow);
+    sheet
+      .getRange(sheet.getLastRow(), COL_DATE_ENVOI, 1, 2)
+      .setNumberFormat("dd/MM/yyyy");
 
-    return ContentService.createTextOutput(
-      JSON.stringify({ status: "success" }),
-    ).setMimeType(ContentService.MimeType.JSON);
-    //.setHeaders(headers); // ContentService ne permet pas de set des headers customs facilement, mais le setMimeType suffit généralement avec jsonp ou text/plain coté client
+    return jsonResponse_({ status: "success" });
   } catch (error) {
-    return ContentService.createTextOutput(
-      JSON.stringify({ status: "error", message: error.toString() }),
-    ).setMimeType(ContentService.MimeType.JSON);
+    return jsonResponse_({ status: "error", message: error.toString() });
+  } finally {
+    lock.releaseLock();
   }
-}
-
-// Optionnel, pour réagir aux requetes OPTIONS (CORS preflight)
-function doOptions(e) {
-  var headers = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
-    "Access-Control-Max-Age": "86400",
-  };
-  return ContentService.createTextOutput("").setMimeType(
-    ContentService.MimeType.TEXT,
-  );
 }
