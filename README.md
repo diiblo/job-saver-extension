@@ -1,91 +1,112 @@
 # 🚀 Job Saver - Extension Chrome
 
-**Job Saver** est une extension Chrome pratique et intelligente conçue pour vous faire gagner un temps précieux lors de vos recherches d'emploi. Elle permet de sauvegarder facilement et rapidement les détails des offres d'emploi que vous consultez, directement dans un tableau de bord Google Sheets. Fini les copier-coller fastidieux entre les différents onglets !
+**Job Saver** enregistre vos candidatures dans un tableau Google Sheets, quel que soit le site sur lequel vous postulez : LinkedIn, Indeed, La Bonne Alternance, Welcome to the Jungle, France Travail, HelloWork, APEC, JobTeaser, sites carrière des entreprises (Workday, Lever, Greenhouse…). Les infos de l'offre sont détectées automatiquement, et les candidatures envoyées sans l'extension peuvent être rattrapées depuis vos e-mails Gmail.
 
 ---
 
 ## ✨ Fonctionnalités Principales
 
-- **Panneau flottant tout-en-un :** Un panneau escamotable s'injecte discrètement sur n'importe quelle page web, prêt à accueillir les informations de l'offre (Entreprise, Titre, Lieu, Type de poste, Source, Lien de l'offre).
-- **Remplissage Intelligent au Clic-Droit (Menu Contextuel) :** Sélectionnez du texte sur une page d'offre d'emploi, faites un clic-droit, et envoyez directement la sélection dans le champ de votre choix (Ex: "Copier vers : Titre de l'offre").
-- **Capture automatique de l'URL :** L'adresse web de la page active est récupérée et pré-remplie automatiquement.
-- **Ajout automatisé des dates :** Lorsqu'une offre est sauvegardée, la date du jour (Date d'Envoi) et une date de rappel (Date de Relance fixée à + 7 jours) sont automatiquement insérées dans votre Google Sheets grâce au script.
-- **Enregistrement en arrière-plan :** Les offres sont envoyées et ajoutées instantanément à votre tableau de suivi de candidatures via le bouton Sauvegarder !
+- **Remplissage automatique :** entreprise, intitulé, lieu, type de contrat (CDI, CDD, Alternance, Stage) et source sont détectés sur la page de l'offre.
+  - Données structurées *JobPosting* (publiées par la plupart des sites pour Google Jobs).
+  - Extracteurs dédiés pour LinkedIn, Indeed, La Bonne Alternance (offres **et** candidatures spontanées), Glassdoor et Welcome to the Jungle.
+  - Suivi des sites qui changent d'offre sans recharger la page (liste de résultats LinkedIn, Indeed, La Bonne Alternance…). Le bouton **↻** relance la détection.
+- **Détection des candidatures :** quand un site affiche « Votre candidature a été envoyée » (ou quand vous cliquez sur « Postuler » pour partir chez le recruteur), Job Saver propose de l'enregistrer en un clic. Sur la page de confirmation d'un autre site, il reprend l'offre que vous consultiez juste avant.
+- **Import depuis Gmail :** les e-mails de confirmation (LinkedIn, Indeed, La Bonne Alternance, sites carrière…) sont ajoutés au tableau, automatiquement toutes les 6 heures si vous le souhaitez. Les e-mails de refus passent la candidature au statut « Refus ».
+- **Pas de doublons :** une offre déjà enregistrée (même lien, ou même entreprise + intitulé) est signalée par une pastille verte et le bandeau « Déjà postulé le … ».
+- **Hors ligne :** si l'envoi échoue, la candidature est gardée et renvoyée automatiquement.
+- **Suivi dans Google Sheets :** date d'envoi, date de relance (+7 jours), statut (Envoyée, Relancée, Entretien, Refus, Offre reçue, Abandon), notes, et couleurs automatiques quand une relance est due.
+- **Menu clic droit :** sélectionnez un texte > clic droit > **Job Saver** > **Copier vers : …** pour corriger un champ.
 
 ---
 
 ## 🛠️ Prérequis
 
 - Le navigateur **Google Chrome** (ou un navigateur Web basé sur Chromium).
-- Un compte **Google** (pour mettre en place le fichier Google Sheets et son script Apps Script associé).
+- Un compte **Google** (pour le fichier Google Sheets et son script Apps Script).
 
 ---
 
 ## 📥 Installation de l'Extension
 
 1. Téléchargez ou clonez ce dépôt sur votre ordinateur.
-2. Ouvrez Google Chrome et accédez à la page de gestion des extensions en tapant `chrome://extensions/` dans la barre d'adresse.
-3. Activez le **Mode développeur** (interrupteur en haut à droite de la page).
-4. Cliquez sur le bouton **Charger l'extension non empaquetée** (en haut à gauche).
-5. Sélectionnez le dossier contenant les fichiers de ce projet (le dossier contenant `manifest.json`).
-6. L'extension est maintenant installée dans votre navigateur !
+2. Ouvrez `chrome://extensions/`.
+3. Activez le **Mode développeur** (interrupteur en haut à droite).
+4. Cliquez sur **Charger l'extension non empaquetée** et sélectionnez le dossier contenant `manifest.json`.
+
+> Après une mise à jour du dossier, cliquez sur l'icône ↻ de l'extension dans `chrome://extensions/` puis rechargez les pages ouvertes.
 
 ---
 
 ## ⚙️ Configuration du Webhook (Côté Google Sheets)
 
-Pour que l'extension puisse communiquer avec votre fichier de sauvegarde Google Sheets, vous devez mettre en place un **Webhook** via Google Apps Script. Voici la marche à suivre :
-
 ### 1. Préparation du document Google Sheets
 1. Créez un nouveau fichier **Google Sheets** (par exemple : "Suivi des Candidatures").
-2. Dans la première ligne, insérez vos en-têtes de colonnes **exactement dans cet ordre** pour correspondre au script :
-   - *1. Entreprise*
-   - *2. Titre de l'offre*
-   - *3. Type de poste*
-   - *4. Lien*
-   - *5. Lieu*
-   - *6. Source*
-   - *7. Date d'Envoi*
-   - *8. Date de Relance*
+2. Nommez l'onglet **Candidatures** (sinon le premier onglet est utilisé). Les en-têtes de colonnes sont créés automatiquement :
+   *Entreprise, Titre de l'offre, Type de poste, Lien, Lieu, Source, Date d'Envoi, Date de Relance, Type de candidature, Statut, Notes.*
+
+   Un ancien tableau à 8 colonnes reste compatible : les 3 nouvelles colonnes sont ajoutées à droite.
 
 ### 2. Création de l'application (Apps Script)
-1. Toujours dans votre Google Sheets, cliquez sur **Extensions > Apps Script** dans le menu supérieur.
-2. Un nouvel onglet d'éditeur de code s'ouvre. Effacez tout le code présent par défaut.
-3. Ouvrez le fichier `Code.gs` fourni dans ce projet et **copiez-collez son contenu intégral** dans l'éditeur de l'Apps Script.
-4. Enregistrez le projet (icône de disquette 💾 ou `Ctrl+S` / `Cmd+S`).
+1. Dans Google Sheets, cliquez sur **Extensions > Apps Script**.
+2. Effacez le code présent et **collez le contenu intégral** du fichier `Code.gs`.
+3. *(Recommandé)* Renseignez un jeton secret en haut du fichier : `var SECRET_TOKEN = "une-phrase-longue-et-secrete";`
+4. Enregistrez le projet (`Ctrl+S` / `Cmd+S`).
 
 ### 3. Déploiement de l'API Webhook
-1. En haut à droite, cliquez sur le bouton bleu **Déployer > Nouvelle implémentation**.
-2. Cliquez sur la **roue crantée ⚙️** à côté de "Sélectionner le type", puis choisissez **Application Web**.
-3. Remplissez les paramètres de la façon suivante :
-   - **Description :** *Job Saver Webhook* (ou le nom de votre choix)
-   - **Exécuter en tant que :** *Moi (votre adresse e-mail)*
+1. Cliquez sur **Déployer > Nouveau déploiement**.
+2. Roue crantée ⚙️ > **Application Web**.
+3. Paramètres :
+   - **Exécuter en tant que :** *Moi*
    - **Qui a accès :** *Tout le monde*
-4. Cliquez sur le bouton **Déployer**. *(🚨 Note : Google peut vous demander d'autoriser l'accès à vos données, acceptez et validez les alertes de sécurité en cliquant sur "Paramètres avancés" > "Aller au projet (non sécurisé)" si nécessaire).*
-5. Une fois déployé avec succès, copiez **l'URL de l'application Web** affichée. C'est l'URL de votre Webhook dont l'extension a besoin !
+4. Cliquez sur **Déployer** et autorisez l'accès (« Paramètres avancés » > « Accéder au projet » si Google affiche un avertissement).
+5. Copiez **l'URL de l'application Web** (elle se termine par `/exec`).
+
+> 🔁 **Après chaque modification de `Code.gs`** : **Déployer > Gérer les déploiements** > ✏️ > **Version : Nouvelle version** > **Déployer**. L'URL reste la même.
+
+### 4. Mise en forme du tableau
+Rechargez le Google Sheets : un menu **Job Saver** apparaît. Cliquez sur **Job Saver > Configurer le tableau** pour ajouter la liste déroulante des statuts et les couleurs :
+- 🟧 relance due (date de relance passée, statut « Envoyée ») ;
+- 🟩 entretien ou offre reçue ;
+- grisé : refus ou abandon.
+
+### 5. Import Gmail (facultatif)
+- **Job Saver > Importer depuis Gmail (60 derniers jours)** : rattrape les candidatures passées. Google demande l'autorisation d'accéder à Gmail la première fois.
+- **Job Saver > Activer l'import Gmail automatique** : vérifie les nouveaux e-mails toutes les 6 heures.
+- Les e-mails traités reçoivent le libellé **Job Saver** dans Gmail.
+
+> L'analyse des e-mails est approximative : vérifiez les lignes importées (colonne Notes : « Importé depuis Gmail : objet du mail »).
 
 ---
 
 ## 🔗 Connexion de l'Extension au Webhook
 
-La dernière étape consiste à relier l'extension Chrome à votre Webhook fraîchement créé :
+1. Cliquez sur l'icône **Job Saver** dans la barre d'outils Chrome (épinglez-la depuis le menu 🧩).
+2. Collez l'**URL du Webhook** et, si vous en avez défini un, le **jeton secret**.
+3. Cliquez sur **Tester**, puis sur **Enregistrer**.
 
-1. Cliquez sur l'icône de l'extension **Job Saver** dans la barre d'outils Chrome (il peut être nécessaire de l'épingler depuis le menu des extensions 🧩).
-2. Une petite fenêtre contextuelle (Pop-up) s'ouvre.
-3. Collez **l'URL du Webhook** que vous venez de copier à l'étape précédente.
-4. Cliquez sur **Enregistrer**. Un message de confirmation vous certifiera le succès de l'opération.
-
-Votre extension est maintenant prête à vous faire gagner du temps ! 🎉
+La popup permet aussi de :
+- activer ou désactiver la détection des candidatures ;
+- afficher le bouton flottant sur tous les sites (par défaut, seulement sur les pages d'offres) ;
+- synchroniser la liste des candidatures connues (pour « Déjà postulé ») ;
+- renvoyer les candidatures en attente ;
+- exporter l'historique local en CSV.
 
 ---
 
 ## 💡 Guide d'Utilisation au Quotidien
 
-1. Naviguez sur n'importe quel site d'offres d'emploi (LinkedIn, Welcome to the Jungle, Indeed, Pôle Emploi, etc.).
-2. Vous apercevrez un **bouton flottant** en bas sur la page. Cliquez dessus pour ouvrir le panneau **Job Saver**.
-3. L'URL étant pré-remplie, **deux méthodes s'offrent à vous** pour compléter les autres champs de l'offre :
-   - Remplir et taper manuellement les informations relatives au job dans le panneau ouvert.
-   - Surligner un texte sur la page avec votre souris *(Exemple : Sélectionnez le lieu du travail)* > **Faites un Clic-Droit** > **Job Saver** > **Copier vers : Lieu**. Le champ de la catégorie correspondante clignotera en bleu pour confirmer que le texte a été capturé !
-4. Pensez à sélectionner le type de contrat (*CDI, CDD, Alternance, Stage...*) dans la liste déroulante proposée.
-5. Une fois toutes les informations validées, cliquez sur le bouton bleu **Sauvegarder** au bas du panneau.
-6. Le message `✅ Sauvegardé avec succès !` s'affiche et l'extension se referme automatiquement après quelques instants. Vérifiez votre Google Sheets, la ligne est ajoutée et formatée correctement !
+1. Ouvrez une offre sur n'importe quel site d'emploi.
+2. Cliquez sur le **bouton flottant** en bas à droite (ou `Alt` + `Shift` + `J`) : les champs sont déjà remplis.
+3. Vérifiez ou corrigez (au clavier ou avec le clic droit **Job Saver > Copier vers : …**), ajoutez une note si besoin.
+4. Cliquez sur **Sauvegarder**.
+
+Quand vous postulez directement sur le site, Job Saver affiche « 🎉 Candidature envoyée détectée ! » : cliquez sur **Enregistrer** (ou **Vérifier** pour ouvrir le panneau d'abord).
+
+Sur **La Bonne Alternance**, les offres sont enregistrées en type « Offre » et les entreprises susceptibles de recruter en « Candidature spontanée ».
+
+---
+
+## 🧩 Limites connues
+
+- Les sites modifient régulièrement leur structure : si un champ n'est plus détecté, le menu clic droit reste disponible.
+- Le raccourci clavier peut être changé dans `chrome://extensions/shortcuts`.
